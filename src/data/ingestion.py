@@ -6,10 +6,12 @@ import logging
 class DataIngestion:
     def _clean_column_names(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Cleans and standardizes DataFrame column names.
-        - Converts to lowercase
-        - Strips leading/trailing whitespace
-        - Replaces spaces and special characters with underscores
+        Normalize DataFrame column names to a consistent snake_case-like format.
+        
+        This function casts each column name to string, strips leading/trailing whitespace,
+        converts to lowercase, and replaces spaces and hyphens with underscores. It returns
+        a DataFrame with columns renamed according to this mapping. Non-string column names
+        are converted to strings before cleaning.
         """
         clean_cols = {}
         for col in df.columns:
@@ -25,7 +27,15 @@ class DataIngestion:
 
     def load_gym_data(self, file_path: str) -> pd.DataFrame:
         """
-        Load gym data from an Excel file, specifying the header row and cleaning column names.
+        Load gym data from an Excel file, using the second row as column headers, and normalize column names.
+        
+        Reads the Excel file at `file_path` with pandas using header=1 (treating the second row as the header), then applies _clean_column_names to produce normalized, lowercase, underscore-separated column names. If reading or cleaning fails, the method logs an error and returns an empty DataFrame.
+        
+        Parameters:
+            file_path (str): Path to the Excel file to load.
+        
+        Returns:
+            pd.DataFrame: The cleaned DataFrame loaded from the file, or an empty DataFrame on failure.
         """
         try:
             # --- CRITICAL FIX HERE ---
@@ -41,7 +51,19 @@ class DataIngestion:
             return pd.DataFrame()
     
     def batch_load_files(self, file_paths: list[str]) -> pd.DataFrame:
-        """Load multiple Excel files, clean columns for each, and combine them."""
+        """
+        Load multiple Excel files, clean each with load_gym_data, and concatenate results.
+        
+        Each file in file_paths is read via load_gym_data; dataframes that are empty (e.g., on read error) are skipped.
+        A new column, `source_file`, is added to each row containing the basename of the originating file.
+        The order of rows follows the order of file_paths and their internal row order.
+        
+        Parameters:
+            file_paths (list[str]): Iterable of filesystem paths to Excel files.
+        
+        Returns:
+            pandas.DataFrame: Concatenated dataframe of all successfully loaded files. Returns an empty DataFrame if none loaded.
+        """
         combined_df = pd.DataFrame()
         for file_path in file_paths:
             df = self.load_gym_data(file_path)

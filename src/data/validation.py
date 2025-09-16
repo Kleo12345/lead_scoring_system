@@ -7,20 +7,25 @@ import logging
 class DataValidator:
     def __init__(self):
         """
-        Initializes the DataValidator.
-        The email regex is no longer needed as we use the email-validator library.
+        Initialize DataValidator.
+        
+        No runtime initialization is performed and no instance attributes are created. The module relies on the email-validator library for email checks (so a compiled email regex is not used); this constructor exists for API compatibility.
         """
         pass
 
     def validate_email(self, email: str) -> bool:
         """
-        Validates an email address for correct syntax and deliverability (MX record check).
+        Return True if `email` is a valid and deliverable email address (syntax + MX check).
         
-        Args:
-            email: The email string to validate.
-            
+        Performs input checks (must be a non-empty string and not pandas NA), then delegates validation to
+        email_validator.validate_email(...) with deliverability checking (MX record lookup). Any validation
+        errors or unexpected exceptions are handled internally and result in False.
+        
+        Parameters:
+            email (str): Email address to validate; non-string, empty, or NA values return False.
+        
         Returns:
-            True if the email is valid, False otherwise.
+            bool: True if the address is syntactically valid and passes deliverability checks, False otherwise.
         """
         # Ensure the input is a non-empty string before validation
         if not isinstance(email, str) or not email or pd.isna(email):
@@ -42,6 +47,14 @@ class DataValidator:
             return False
 
     def validate_phone(self, phone: str) -> bool:
+        """
+        Validate a phone number by normalizing digits and checking length.
+        
+        Returns True if `phone` is a non-empty value (not NA) that, after removing all non-digit characters, contains exactly 10 or 11 digits; otherwise returns False.
+        
+        Parameters:
+            phone: The phone number to validate; may be any value convertible to string (common formats with spaces, dashes, parentheses, or country code are supported by the normalization step).
+        """
         if not phone or pd.isna(phone):
             return False
         # Remove non-digits and check length
