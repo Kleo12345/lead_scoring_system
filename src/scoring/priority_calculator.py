@@ -1,43 +1,44 @@
 # lead_scoring_system/src/scoring/priority_calculator.py
-from dataclasses import dataclass
-from typing import List, Dict
-
-@dataclass
-class LeadScore:
-    business_name: str
-    email: str
-    total_score: int
-    tier: str
-    opportunities: List[str]
-    contact_quality: str
-    estimated_value: str
+from typing import Dict, Tuple
 
 class PriorityCalculator:
-    def __init__(self):
-        self.weights = {
-            'business_size': 0.30,
-            'digital_presence': 0.25,
-            'engagement_opportunity': 0.20,
-            'contact_quality': 0.15,
-            'tech_needs': 0.10
-        }
+    def __init__(self, config: Dict):
+        """
+        Initializes the PriorityCalculator.
+        Requires 'scoring_weights', 'tier_thresholds', and 'tier_definitions' 
+        sections in the provided config dictionary.
+        """
+        # Using .get() can provide clearer error messages if a key is missing
+        self.weights = config.get('scoring_weights')
+        if not self.weights:
+            raise KeyError("Config is missing 'scoring_weights' section.")
+
+        self.tiers = config.get('tier_thresholds')
+        if not self.tiers:
+            raise KeyError("Config is missing 'tier_thresholds' section.")
+
+        self.tier_defs = config.get('tier_definitions')
+        if not self.tier_defs:
+            raise KeyError("Config is missing 'tier_definitions' section.")
     
-    def calculate_final_score(self, scores: Dict) -> LeadScore:
-        """Calculate weighted final score and assign tier"""
-        total = sum(scores[key] * self.weights.get(key, 0) for key in scores)
+    def calculate_final_score(self, scores: Dict) -> Tuple[float, str, str]:
+        """Calculate weighted final score and assign tier based on config."""
+        # Calculate the weighted sum of all provided scores
+        total = sum(scores.get(key, 0) * self.weights.get(key, 0) for key in self.weights)
         
-        # Determine tier for new marketing agency
-        if total >= 80:
-            tier = "HOT - High Value Prospect"
-            estimated_value = "$2000-5000/month"
-        elif total >= 65:
-            tier = "WARM - Good Opportunity"
-            estimated_value = "$1000-2500/month"
-        elif total >= 45:
-            tier = "COLD - Potential Client"
-            estimated_value = "$500-1200/month"
+        # Determine the tier by comparing the total score against thresholds
+        if total >= self.tiers.get('hot', 999): # Use .get for safety
+            tier_key = 'hot'
+        elif total >= self.tiers.get('warm', 999):
+            tier_key = 'warm'
+        elif total >= self.tiers.get('cold', 999):
+            tier_key = 'cold'
         else:
-            tier = "LOW - Minimal Opportunity"
-            estimated_value = "<$500/month"
+            tier_key = 'low'
             
-        return total, tier, estimated_value
+        # Look up the tier's name and estimated value from the definitions
+        tier_info = self.tier_defs.get(tier_key, {})
+        tier_name = tier_info.get('name', 'Undefined Tier')
+        estimated_value = tier_info.get('value', 'N/A')
+            
+        return total, tier_name, estimated_value
