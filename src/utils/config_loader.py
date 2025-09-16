@@ -5,7 +5,20 @@ import os
 
 def load_config(path: str = "/home/john/dev/python/snow_tools/lead_scoring_system/config/scoring_weights.yaml") -> Dict[str, Any]:
     """
-    Loads the YAML configuration file from the project's root directory.
+    Load a YAML configuration file and return its contents as a dictionary.
+    
+    The supplied `path` is resolved relative to the repository root (three levels above this file).
+    If `path` is absolute, that absolute path will be used.
+    
+    Parameters:
+        path (str): Filesystem path to the YAML configuration file. Defaults to
+            "/home/john/dev/python/snow_tools/lead_scoring_system/config/scoring_weights.yaml".
+    
+    Returns:
+        Dict[str, Any]: Parsed contents of the YAML file.
+    
+    Raises:
+        FileNotFoundError: If the resolved configuration file does not exist.
     """
     # Navigate up to the project root to find the config file
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

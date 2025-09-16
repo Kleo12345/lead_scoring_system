@@ -21,6 +21,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 class LeadScoringPipeline:
     def __init__(self):
+        """
+        Initialize the LeadScoringPipeline.
+        
+        Loads runtime configuration and instantiates pipeline components used for ingesting,
+        validating, enriching, scoring, prioritizing, and persisting leads:
+        - Data ingestion and validation
+        - A web scraper for enrichment
+        - Scorers for business metrics, digital presence, engagement, and contact quality (wired with config and scraper where applicable)
+        - A priority/score calculator
+        - A database manager
+        
+        Side effects:
+        - May allocate external resources (e.g., network/browser sessions via the scraper, database connections). Call cleanup() to release scraper resources when finished.
+        """
         self.config = load_config()
         self.ingestion = DataIngestion()
         self.validator = DataValidator()
@@ -33,7 +47,26 @@ class LeadScoringPipeline:
         self.db = DatabaseManager()
     
     def process_leads(self, file_paths: List[str]) -> pd.DataFrame:
-        """Main processing pipeline using cleaned, lowercase column names."""
+        """
+        Process input lead files, score each lead across multiple dimensions, persist results, and return a ranked DataFrame.
+        
+        This method:
+        - Loads data from the provided file paths (via the ingestion component).
+        - Keeps only rows with valid lowercase 'email' values.
+        - For each lead, computes scores using the configured scorers:
+          business size, digital presence, engagement opportunity, and contact quality.
+        - Aggregates scores into a final total, tier, and estimated value via the priority calculator.
+        - Produces a standardized output row per lead and returns a DataFrame sorted by TotalScore descending.
+        - Persists the final DataFrame to the database and writes it to data/output/scored_leads.csv.
+        
+        Parameters:
+            file_paths (List[str]): Paths to input files to batch-load.
+        
+        Returns:
+            pd.DataFrame: DataFrame of scored leads (columns include BusinessName, Email, Phone, Website,
+            City, TotalScore, Tier, EstimatedValue, NeedsRedesign, NeedsReviews). The DataFrame is empty
+            if no valid leads were processed.
+        """
         df = self.ingestion.batch_load_files(file_paths)
         
         # --- CHANGE: Use 'email' (lowercase) ---
@@ -95,6 +128,11 @@ class LeadScoringPipeline:
         return results_df
         
     def cleanup(self):
+        """
+        Release external resources held by the pipeline.
+        
+        Calls the underlying scraper's cleanup method to close network sessions and free any associated resources. No return value.
+        """
         self.scraper.cleanup()
 
 if __name__ == "__main__":

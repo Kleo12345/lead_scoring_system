@@ -16,6 +16,11 @@ class FreeScraper:
     """A centralized scraper for all external web data, using requests and Selenium with Microsoft Edge."""
     
     def __init__(self):
+        """
+        Initialize FreeScraper.
+        
+        Creates an HTTP session with a fixed browser-like User-Agent header, initializes the Selenium WebDriver reference to None, and attempts to configure a headless Microsoft Edge WebDriver by calling _setup_selenium. The resulting instance is ready for requests-based scraping; Google Maps scraping will be available only if the Edge driver setup succeeds.
+        """
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59'
@@ -24,7 +29,11 @@ class FreeScraper:
         self._setup_selenium()
     
     def _setup_selenium(self):
-        """Setup headless Microsoft Edge for JS-heavy sites like Google Maps."""
+        """
+        Initialize a headless Microsoft Edge WebDriver and attach it to self.driver.
+        
+        Attempts to configure Edge with headless and safety flags, mirror the session User-Agent, install the Edge Chromium driver, create a webdriver.Edge instance, and set a 20-second page load timeout. On success the driver instance is stored on self.driver for use by Selenium-based scrapers (e.g., Google Maps). If setup fails for any reason, self.driver is set to None and Selenium-based scraping will be disabled.
+        """
         try:
             # --- CHANGE: Use Edge Options ---
             options = Options()
@@ -49,7 +58,29 @@ class FreeScraper:
             self.driver = None
     
     def scrape_website_data(self, url: str) -> Dict[str, Any]:
-        """Scrapes a website for digital presence indicators."""
+        """
+        Analyze a webpage (via HTTP GET) and infer simple digital-presence indicators.
+        
+        Performs a requests GET (15s timeout) and parses the HTML with BeautifulSoup to populate a dictionary of boolean flags about accessibility, SEO/UX, booking capabilities, design tech, and imagery.
+        
+        Parameters:
+            url (str): Full URL of the page to inspect (include scheme, e.g. "https://...").
+        
+        Returns:
+            Dict[str, Any]: A dictionary with these keys:
+                - is_accessible (bool): True if the page returned a successful HTTP response.
+                - has_ssl (bool): True if the provided URL uses "https://".
+                - is_mobile_friendly (bool): True if a viewport meta tag indicates mobile layout (contains "width=device-width").
+                - has_title_and_desc (bool): True if both a <title> tag and a meta description are present.
+                - has_booking_feature (bool): True if common booking-related keywords appear in the page text (e.g., book, schedule, appointment).
+                - design_is_modern (bool): True if common modern framework/tech indicators are present (e.g., "bootstrap", "react", "vue").
+                - design_is_outdated (bool): True if signs of table-based layout are present (contains "<table" and the term "layout").
+                - has_images (bool): True if more than three <img> elements are found.
+        
+        Notes:
+            - Any network/parse error results in a best-effort partial dictionary (defaults preserved).
+            - This method is browser-agnostic and does not execute JavaScript.
+        """
         # This method is browser-agnostic and needs no changes.
         data = {
             'is_accessible': False,
@@ -95,7 +126,19 @@ class FreeScraper:
         return data
 
     def scrape_google_maps_data(self, gmaps_url: str) -> Dict[str, Any]:
-        """Scrapes Google Maps for review count and average rating using Selenium."""
+        """
+        Fetch the review count and average rating from a Google Maps place page using the configured Selenium driver.
+        
+        If the scraper's WebDriver is not available or the provided URL is not a Google Maps URL (does not contain "maps.google.com"), this returns the default values { 'review_count': 0, 'average_rating': 0.0 }.
+        
+        Parameters:
+            gmaps_url (str): A Google Maps place URL (must contain "maps.google.com"); other URLs will be ignored.
+        
+        Returns:
+            dict: Keys:
+                - review_count (int): Total number of reviews found (commas permitted in source are handled).
+                - average_rating (float): Average star rating extracted from an `aria-label` like "4.5 stars".
+        """
         # This method is browser-agnostic and needs no changes.
         data = { 'review_count': 0, 'average_rating': 0.0 }
         
