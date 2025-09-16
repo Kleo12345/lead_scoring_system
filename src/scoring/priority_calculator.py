@@ -1,43 +1,67 @@
 # lead_scoring_system/src/scoring/priority_calculator.py
-from dataclasses import dataclass
-from typing import List, Dict
-
-@dataclass
-class LeadScore:
-    business_name: str
-    email: str
-    total_score: int
-    tier: str
-    opportunities: List[str]
-    contact_quality: str
-    estimated_value: str
+from typing import Dict, Tuple
 
 class PriorityCalculator:
-    def __init__(self):
-        self.weights = {
-            'business_size': 0.30,
-            'digital_presence': 0.25,
-            'engagement_opportunity': 0.20,
-            'contact_quality': 0.15,
-            'tech_needs': 0.10
-        }
-    
-    def calculate_final_score(self, scores: Dict) -> LeadScore:
-        """Calculate weighted final score and assign tier"""
-        total = sum(scores[key] * self.weights.get(key, 0) for key in scores)
+    def __init__(self, config: Dict):
+        """
+        Initialize PriorityCalculator with configuration.
         
-        # Determine tier for new marketing agency
-        if total >= 80:
-            tier = "HOT - High Value Prospect"
-            estimated_value = "$2000-5000/month"
-        elif total >= 65:
-            tier = "WARM - Good Opportunity"
-            estimated_value = "$1000-2500/month"
-        elif total >= 45:
-            tier = "COLD - Potential Client"
-            estimated_value = "$500-1200/month"
+        Parameters:
+            config (Dict): Configuration dict containing three required sections:
+                - 'scoring_weights': mapping of score keys to weight values (used to compute the weighted total).
+                - 'tier_thresholds': numeric thresholds for tiers (expects keys like 'hot', 'warm', 'cold').
+                - 'tier_definitions': mapping of tier keys to metadata (each should provide at least 'name' and/or 'value').
+        
+        Raises:
+            KeyError: If any required section is missing or falsy in `config`. Error messages:
+                "Config is missing 'scoring_weights' section."
+                "Config is missing 'tier_thresholds' section."
+                "Config is missing 'tier_definitions' section."
+        """
+        # Using .get() can provide clearer error messages if a key is missing
+        self.weights = config.get('scoring_weights')
+        if not self.weights:
+            raise KeyError("Config is missing 'scoring_weights' section.")
+
+        self.tiers = config.get('tier_thresholds')
+        if not self.tiers:
+            raise KeyError("Config is missing 'tier_thresholds' section.")
+
+        self.tier_defs = config.get('tier_definitions')
+        if not self.tier_defs:
+            raise KeyError("Config is missing 'tier_definitions' section.")
+    
+    def calculate_final_score(self, scores: Dict) -> Tuple[float, str, str]:
+        """
+        Compute a weighted final score from input feature scores and map it to a configured tier.
+        
+        Scores are weighted using the calculator's configured `scoring_weights` (weights are taken for each key in that config; missing score keys default to 0). The resulting total is compared against configured `tier_thresholds` in descending order (hot, warm, cold, then low) to pick a tier key. Tier metadata (human-readable name and estimated value) are returned from the configured `tier_definitions`.
+        
+        Parameters:
+            scores (Dict): Mapping of score keys to numeric values (e.g., feature -> score). Keys not present in this dict are treated as 0.
+        
+        Returns:
+            Tuple[float, str, str]: (total, tier_name, estimated_value)
+                - total: weighted numeric score
+                - tier_name: human-readable name for the determined tier (falls back to 'Undefined Tier')
+                - estimated_value: associated estimated value for the tier (falls back to 'N/A')
+        """
+        # Calculate the weighted sum of all provided scores
+        total = sum(scores.get(key, 0) * self.weights.get(key, 0) for key in self.weights)
+        
+        # Determine the tier by comparing the total score against thresholds
+        if total >= self.tiers.get('hot', 999): # Use .get for safety
+            tier_key = 'hot'
+        elif total >= self.tiers.get('warm', 999):
+            tier_key = 'warm'
+        elif total >= self.tiers.get('cold', 999):
+            tier_key = 'cold'
         else:
-            tier = "LOW - Minimal Opportunity"
-            estimated_value = "<$500/month"
+            tier_key = 'low'
             
-        return total, tier, estimated_value
+        # Look up the tier's name and estimated value from the definitions
+        tier_info = self.tier_defs.get(tier_key, {})
+        tier_name = tier_info.get('name', 'Undefined Tier')
+        estimated_value = tier_info.get('value', 'N/A')
+            
+        return total, tier_name, estimated_value

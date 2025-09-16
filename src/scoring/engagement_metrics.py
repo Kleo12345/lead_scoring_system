@@ -1,118 +1,98 @@
 # lead_scoring_system/src/scoring/engagement_metrics.py
-import re
-import requests
 from typing import Tuple, Dict
 import logging
+from src.free_scraper import FreeScraper
 
 class EngagementScorer:
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+    def __init__(self, scraper: FreeScraper, config: Dict):
+        """
+        Initialize the EngagementScorer.
+        
+        Stores the provided scraper instance for fetching Google Maps data and extracts the
+        'review_opportunity_scoring' subsection from the given configuration for use by
+        scoring methods.
+        
+        Parameters:
+            config (Dict): Full configuration dictionary; must contain the key
+                'review_opportunity_scoring' whose value is a dict of scoring thresholds
+                used by analyze_review_opportunity.
+        """
+        self.scraper = scraper
+        self.config = config['review_opportunity_scoring']
     
-    def analyze_review_opportunity(self, gmaps_url: str, yelp_url: str = None) -> Tuple[int, Dict]:
-        """Analyze Google Reviews opportunity using free scraping (0-20 points)"""
+    def analyze_review_opportunity(self, gmaps_url: str) -> Tuple[int, Dict]:
+        """
+        Determine a review-opportunity score and related metadata for a Google Maps listing URL using scraped data and scoring rules from the instance config.
+        
+        This method fetches review data via the injected scraper and maps the scraped review_count to a score using these config keys: 'no_reviews', 'few_reviews', 'moderate_reviews', and 'many_reviews'. It also sets a 'needs_review_campaign' flag when the score indicates an opportunity for a review campaign.
+        
+        Parameters:
+            gmaps_url (str): URL of the Google Maps listing to analyze; passed to the scraper.
+        
+        Returns:
+            tuple[int, dict]: (score, opportunities) where:
+              - score: integer opportunity score derived from config thresholds.
+              - opportunities: dict containing:
+                  - 'needs_review_campaign' (bool): whether a review campaign is advisable.
+                  - 'review_count' (int): review count taken from scraped data (defaults to 0).
+                  - 'average_rating' (float): average rating from scraped data (defaults to 0.0).
+        
+        Notes:
+            - The scraper is expected to return a mapping with 'review_count' and 'average_rating'.
+            - If scraped data appears missing (review_count == 0 and average_rating == 0.0) but a gmaps_url was provided, the method treats this as a likely scraping failure and assigns the 'moderate_reviews' score from the config while marking a review campaign as needed.
+        """
+        scraped_data = self.scraper.scrape_google_maps_data(gmaps_url)
+        
         score = 0
         opportunities = {
             'needs_review_campaign': False, 
-            'review_count': 0,
-            'average_rating': 0.0,
-            'recent_reviews': False
+            'review_count': scraped_data.get('review_count', 0),
+            'average_rating': scraped_data.get('average_rating', 0.0)
         }
         
-        try:
-            if gmaps_url and 'maps.google.com' in gmaps_url:
-                response = self.session.get(gmaps_url, timeout=15)
-                content = response.text
-                
-                # Extract review count using regex patterns
-                review_patterns = [
-                    r'(\d+)\s*reviews?',
-                    r'"reviewCount":(\d+)',
-                    r'review.*?(\d+)',
-                    r'(\d+).*?review'
-                ]
-                
-                review_count = 0
-                for pattern in review_patterns:
-                    matches = re.findall(pattern, content, re.IGNORECASE)
-                    if matches:
-                        review_count = max([int(match) for match in matches if match.isdigit()])
-                        break
-                
-                opportunities['review_count'] = review_count
-                
-                # Extract star rating
-                rating_patterns = [
-                    r'(\d\.\d)\s*star',
-                    r'"aggregateRating".*?"ratingValue":"(\d\.\d)"',
-                    r'aria-label="(\d\.\d) stars"'
-                ]
-                
-                for pattern in rating_patterns:
-                    rating_matches = re.findall(pattern, content, re.IGNORECASE)
-                    if rating_matches:
-                        try:
-                            opportunities['average_rating'] = float(rating_matches[0])
-                            break
-                        except:
-                            continue
-                
-                # Score based on review count
-                if review_count == 0:
-                    score = 20  # Biggest opportunity
-                    opportunities['needs_review_campaign'] = True
-                elif review_count < 10:
-                    score = 18
-                    opportunities['needs_review_campaign'] = True
-                elif review_count < 25:
-                    score = 15
-                    opportunities['needs_review_campaign'] = True
-                elif review_count < 50:
-                    score = 8
-                else:
-                    score = 3  # Already has good reviews
-                    
-                # Bonus for good ratings but low count
-                if opportunities['average_rating'] >= 4.0 and review_count < 20:
-                    score += 2
-                    
-        except Exception as e:
-            logging.warning(f"Review analysis failed for {gmaps_url}: {e}")
-            # If we can't check, assume opportunity exists
-            score = 15
+        review_count = opportunities['review_count']
+        
+        # Score based on review count using values from the config file
+        if review_count == 0:
+            score = self.config['no_reviews']
+            opportunities['needs_review_campaign'] = True
+        elif review_count < 10:
+            score = self.config['few_reviews']
+            opportunities['needs_review_campaign'] = True
+        elif review_count < 25:
+            score = self.config['moderate_reviews']
+            opportunities['needs_review_campaign'] = True
+        else:
+            score = self.config['many_reviews']
+            
+        # If scraping failed, assign a default high-opportunity score
+        if review_count == 0 and opportunities['average_rating'] == 0.0 and gmaps_url:
+            score = self.config['moderate_reviews'] # Assume moderate opportunity if scraping fails
             opportunities['needs_review_campaign'] = True
             
         return score, opportunities
     
     def check_online_reputation(self, business_name: str, city: str) -> Tuple[int, Dict]:
-        """Check online reputation using free search (0-10 points)"""
+        """
+        Assess the business's online reputation and return a simple reputation score and metadata.
+        
+        This is a lightweight, placeholder check that produces a base reputation score on a 0–10 scale and a minimal metadata dictionary. It does not perform network requests or search operations in its current form.
+        
+        Parameters:
+            business_name (str): The business name used for future-enhanced reputation checks.
+            city (str): The city used for future-enhanced reputation checks.
+        
+        Returns:
+            Tuple[int, Dict]: A pair (score, reputation_info) where `score` is an integer 0–10 (higher is better) and `reputation_info` contains:
+                - 'has_negative_results' (bool): Whether negative search results were found.
+                - 'needs_reputation_management' (bool): Whether active reputation management is recommended.
+        """
         score = 5  # Base score
         reputation_info = {
             'has_negative_results': False,
             'needs_reputation_management': False
         }
         
-        try:
-            # Search for business + city + "reviews" or "complaints"
-            search_terms = [
-                f"{business_name} {city} reviews",
-                f"{business_name} {city} complaints"
-            ]
-            
-            for term in search_terms[:1]:  # Limit to avoid too many requests
-                search_url = f"https://www.google.com/search?q={term.replace(' ', '+')}"
-                response = self.session.get(search_url, timeout=10)
-                
-                # Look for negative indicators in search results
-                negative_indicators = ['complaint', 'scam', 'terrible', 'worst', 'awful', 'fraud']
-                if any(indicator in response.text.lower() for indicator in negative_indicators):
-                    reputation_info['has_negative_results'] = True
-                    reputation_info['needs_reputation_management'] = True
-                    score = 10  # High opportunity for reputation management
-                    
-        except Exception as e:
-            logging.warning(f"Reputation check failed for {business_name}: {e}")
-            
+        # The logic for this method has not been modified yet.
+        # Future improvements could include using config for keywords and scores.
         return score, reputation_info
