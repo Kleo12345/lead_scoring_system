@@ -2,140 +2,126 @@
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+# --- CHANGE: Import Edge-specific classes ---
+from selenium.webdriver.edge.options import Options
+from selenium.webdriver.edge.service import Service
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+# --- END CHANGE ---
 import time
 import logging
-from typing import Optional, Dict, Any
+import re
+from typing import Dict, Any
 
 class FreeScraper:
-    """Free web scraper for gym lead analysis - no APIs required"""
+    """A centralized scraper for all external web data, using requests and Selenium with Microsoft Edge."""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59'
         })
         self.driver = None
         self._setup_selenium()
     
     def _setup_selenium(self):
-        """Setup headless Chrome for JS-heavy sites"""
+        """Setup headless Microsoft Edge for JS-heavy sites like Google Maps."""
         try:
+            # --- CHANGE: Use Edge Options ---
             options = Options()
             options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-gpu')
+            options.add_argument(f'user-agent={self.session.headers["User-Agent"]}')
             
-            self.driver = webdriver.Chrome(
-                ChromeDriverManager().install(),
-                options=options
-            )
+            logging.info("Setting up Microsoft Edge WebDriver...")
+            
+            # --- CHANGE: Use EdgeChromiumDriverManager and webdriver.Edge ---
+            service = Service(EdgeChromiumDriverManager().install())
+            self.driver = webdriver.Edge(service=service, options=options)
+            # --- END CHANGE ---
+            
+            self.driver.set_page_load_timeout(20) # Set a timeout
+            logging.info("Microsoft Edge WebDriver setup successful.")
+            
         except Exception as e:
-            logging.warning(f"Selenium setup failed: {e}")
+            logging.warning(f"Selenium (Edge) setup failed: {e}. Google Maps scraping will be disabled.")
+            self.driver = None
     
-    def scrape_website(self, url: str) -> Dict[str, Any]:
-        """Scrape website for tech analysis"""
+    def scrape_website_data(self, url: str) -> Dict[str, Any]:
+        """Scrapes a website for digital presence indicators."""
+        # This method is browser-agnostic and needs no changes.
         data = {
-            'accessible': False,
-            'mobile_friendly': False,
+            'is_accessible': False,
             'has_ssl': url.startswith('https://'),
-            'tech_stack': [],
-            'has_booking': False,
-            'design_quality': 'unknown'
+            'is_mobile_friendly': False,
+            'has_title_and_desc': False,
+            'has_booking_feature': False,
+            'design_is_modern': False,
+            'design_is_outdated': False,
+            'has_images': False
         }
         
         try:
             response = self.session.get(url, timeout=15)
-            if response.status_code == 200:
-                data['accessible'] = True
-                soup = BeautifulSoup(response.content, 'html.parser')
-                content = response.text.lower()
+            response.raise_for_status()
+            
+            data['is_accessible'] = True
+            soup = BeautifulSoup(response.content, 'html.parser')
+            html_content = response.text.lower()
+            
+            viewport_meta = soup.find('meta', {'name': 'viewport'})
+            if viewport_meta and 'width=device-width' in str(viewport_meta):
+                data['is_mobile_friendly'] = True
+            
+            meta_description = soup.find('meta', {'name': 'description'})
+            title_tag = soup.find('title')
+            if meta_description and title_tag:
+                data['has_title_and_desc'] = True
                 
-                # Mobile check
-                viewport = soup.find('meta', {'name': 'viewport'})
-                data['mobile_friendly'] = bool(viewport and 'width=device-width' in str(viewport))
-                
-                # Tech stack detection
-                if 'wordpress' in content: data['tech_stack'].append('WordPress')
-                if 'react' in content: data['tech_stack'].append('React')
-                if 'bootstrap' in content: data['tech_stack'].append('Bootstrap')
-                if 'jquery' in content: data['tech_stack'].append('jQuery')
-                
-                # Booking system check
-                booking_terms = ['book', 'schedule', 'reserve', 'appointment', 'class signup']
-                data['has_booking'] = any(term in content for term in booking_terms)
-                
-                # Design quality indicators
-                if '<table' in content and 'layout' in content:
-                    data['design_quality'] = 'outdated'
-                elif any(modern in content for modern in ['bootstrap', 'react', 'vue']):
-                    data['design_quality'] = 'modern'
-                else:
-                    data['design_quality'] = 'basic'
-                    
+            booking_keywords = ['book', 'schedule', 'appointment', 'class', 'reserve', 'sign up']
+            data['has_booking_feature'] = any(keyword in html_content for keyword in booking_keywords)
+            
+            if '<table' in html_content and 'layout' in html_content:
+                data['design_is_outdated'] = True
+            if any(tech in html_content for tech in ['bootstrap', 'react', 'vue']):
+                data['design_is_modern'] = True
+            
+            data['has_images'] = len(soup.find_all('img')) > 3
+
         except Exception as e:
             logging.warning(f"Website scraping failed for {url}: {e}")
             
         return data
-    
-    def scrape_google_reviews(self, gmaps_url: str) -> Dict[str, Any]:
-        """Scrape Google Maps for review data"""
-        data = {
-            'review_count': 0,
-            'average_rating': 0.0,
-            'accessible': False
-        }
+
+    def scrape_google_maps_data(self, gmaps_url: str) -> Dict[str, Any]:
+        """Scrapes Google Maps for review count and average rating using Selenium."""
+        # This method is browser-agnostic and needs no changes.
+        data = { 'review_count': 0, 'average_rating': 0.0 }
         
+        if not self.driver or not gmaps_url or 'maps.google.com' not in gmaps_url:
+            return data
+
         try:
-            if self.driver:
-                self.driver.get(gmaps_url)
-                time.sleep(3)  # Wait for JS to load
-                page_source = self.driver.page_source
-            else:
-                response = self.session.get(gmaps_url, timeout=15)
-                page_source = response.text
+            self.driver.get(gmaps_url)
+            time.sleep(4)
+            page_source = self.driver.page_source
             
-            data['accessible'] = True
+            review_match = re.search(r'([\d,]+)\s+reviews', page_source, re.IGNORECASE)
+            if review_match:
+                data['review_count'] = int(review_match.group(1).replace(',', ''))
             
-            # Extract review count
-            import re
-            review_matches = re.findall(r'(\d+)\s*reviews?', page_source, re.IGNORECASE)
-            if review_matches:
-                data['review_count'] = max([int(match) for match in review_matches])
-            
-            # Extract rating
-            rating_matches = re.findall(r'(\d\.\d)\s*star', page_source, re.IGNORECASE)
-            if rating_matches:
-                data['average_rating'] = float(rating_matches[0])
-                
+            rating_match = re.search(r'aria-label="([\d\.]+)\s+stars"', page_source, re.IGNORECASE)
+            if rating_match:
+                data['average_rating'] = float(rating_match.group(1))
+
         except Exception as e:
-            logging.warning(f"Google Maps scraping failed: {e}")
+            logging.warning(f"Google Maps scraping failed for {gmaps_url}: {e}")
             
         return data
-    
-    def check_social_presence(self, instagram_url: str = None, facebook_url: str = None) -> Dict[str, Any]:
-        """Basic social media presence check"""
-        data = {
-            'instagram_active': False,
-            'facebook_active': False,
-            'total_platforms': 0
-        }
-        
-        for platform, url in [('instagram', instagram_url), ('facebook', facebook_url)]:
-            if url:
-                try:
-                    response = self.session.get(url, timeout=10)
-                    if response.status_code == 200 and 'not found' not in response.text.lower():
-                        data[f'{platform}_active'] = True
-                        data['total_platforms'] += 1
-                except:
-                    pass
-        
-        return data
-    
+
     def cleanup(self):
-        """Close browser resources"""
+        """Closes the Selenium WebDriver session."""
         if self.driver:
             self.driver.quit()
+            logging.info("Selenium (Edge) driver closed.")
