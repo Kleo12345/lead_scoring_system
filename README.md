@@ -61,7 +61,7 @@ Setup and Installation
 
     Python 3.8 or higher
 
-    Google Chrome browser installed (for Selenium)
+    Microsoft Edge browser installed (for Selenium-based scraping of dynamic websites like Google Maps).
 
 2. Clone the Repository:
 code Bash

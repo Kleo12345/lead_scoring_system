@@ -80,3 +80,20 @@ decision_maker_keywords:
   - "director" 
   - "manager"
   - "founder"
+# --- THIS SECTION IS MISSING ---
+# --- ADD OR UNCOMMENT IT ---
+tier_definitions:
+  hot:
+    name: "HOT - High Value Prospect"
+    value: "$2000-5000/month"
+  warm:
+    name: "WARM - Good Opportunity"
+    value: "$1000-2500/month"
+  cold:
+    name: "COLD - Potential Client"
+    value: "$500-1200/month"
+  low:
+    name: "LOW - Minimal Opportunity"
+    value: "<$500/month"
+
+# ... (the rest of your config file) ...
