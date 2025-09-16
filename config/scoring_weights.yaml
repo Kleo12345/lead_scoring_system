@@ -1,0 +1,82 @@
+scoring_weights:
+  business_size: 0.30
+  digital_presence: 0.25  
+  engagement_opportunity: 0.20
+  contact_quality: 0.15
+  tech_needs: 0.10
+
+tier_thresholds:
+  hot: 80
+  warm: 65
+  cold: 45
+  low: 0
+
+# Free scraping settings
+scraping:
+  delay_between_requests: 2
+  timeout: 15
+  max_retries: 3
+  headless_browser: true
+
+business_size_scoring:
+  chain_bonus: 15
+  premium_bonus: 10
+  location_bonus: 5
+  
+digital_presence_scoring:
+  mobile_responsive: 5
+  seo_basics: 3
+  online_booking: 7
+  modern_tech: 5
+  design_quality: 5
+
+contact_quality_scoring:
+  decision_maker_bonus: 25
+  personal_email_bonus: 20
+  business_domain_bonus: 10
+  personal_domain_bonus: 5
+  generic_penalty: -15
+
+review_opportunity_scoring:
+  no_reviews: 25
+  few_reviews: 20  # <10 reviews
+  moderate_reviews: 15  # 10-25 reviews
+  many_reviews: 5  # >25 reviews
+
+# Chain and premium gym indicators
+chain_indicators:
+  - "la fitness"
+  - "planet fitness"
+  - "anytime fitness"
+  - "gold's gym"
+  - "24 hour fitness"
+  - "snap fitness"
+  - "crunch"
+
+premium_indicators:
+  - "equinox"
+  - "lifetime"
+  - "club pilates"  
+  - "orange theory"
+  - "pure barre"
+  - "soulcycle"
+
+# Negative email keywords (generic/low-value contacts)
+negative_email_keywords:
+  - "info"
+  - "contact"
+  - "admin"
+  - "support"
+  - "hello"
+  - "sales"
+  - "noreply"
+  - "no-reply"
+
+# Decision maker email indicators
+decision_maker_keywords:
+  - "owner"
+  - "ceo"
+  - "president"
+  - "director" 
+  - "manager"
+  - "founder"
